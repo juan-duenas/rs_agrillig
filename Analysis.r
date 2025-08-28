@@ -1,27 +1,9 @@
 ####  Moisture response curve experiment - script - Juan F. Dueñas juanfduenas@proton.me
 
 # Load Packages we will work with.
-pkgs <- c("tidyverse", "mgcv", "gratia", "DHARMa", "ggpubr", "vegan", "phyloseq", "ggordiplots")
+pkgs <- c("tidyverse", "mgcv", "gratia", "ggpubr", "vegan", "phyloseq", "ggordiplots", "knitr")
 
 vapply(pkgs, FUN = library, FUN.VALUE = logical(1L), logical.return = TRUE, character.only = TRUE)
-
-# consolidate all measurements in one db
-# mwd <- read_delim("mwd.csv", delim = ",")%>%
-#        select(-1)%>%
-#        select(1,5,2,7,3,4,6)%>%
-#        rename(mwd=MWD, dl=moistureL)
-# wsa <- read_delim("wsa.csv", delim = ",")%>%
-#        mutate(wsa_b=WSA/100)%>%
-#        select(potID, wsa_b)
-# imp <- read_delim("imp.csv", delim = ",")%>%
-#        mutate(across(c("wdpt"),~ifelse(.x==0,1.0e-016,.x)))%>%
-#        select(potID, wdpt)
-# cf <- read_delim("qpcr_f1.csv", delim = ",")%>%
-#       select(potID, log_cop_gS)
-# 
-# l <- list(mwd, wsa, imp, cf)
-# rs_db <- reduce(l, full_join, by="potID")
-# write_csv(rs_db, "rs_db")
 
 # Figure 1 ------ Control soil
 
@@ -35,13 +17,15 @@ rs <- read_delim("rs_db", delim = ",") %>%
        select(potID, dl, whc, no_poll, var, y)%>%
        rename(x=dl, z=whc)%>%
        group_split(var)%>% # split into several databases by treatment and store on a list
-       set_names(., nm = c("cf", "mwd", "imp", "wsa")) #give names to each database  
+       set_names(., nm = c("cf", "mwd", "imp", "wsa")) #give names to each set  
 
+# community data
 f <- readRDS("RS_all.rds")%>% 
      subset_taxa(., Kingdom=="Fungi")%>% # eliminate non target organisms
      filter_taxa(., function(x) sum(x) > 0, TRUE)%>% # keep variants with more than 0 reads
      subset_samples(., treatment%in%c("ctrl")) # ignore warning
 
+# alpha diversity
 alf <- cbind(sample_data(f)[,c(1)], estimate_richness(f, measures=c("InvSimpson")))%>%
        mutate(var=rep("invsimp",44))%>%
        right_join(.,rs[["cf"]], by="potID")%>%
@@ -49,9 +33,10 @@ alf <- cbind(sample_data(f)[,c(1)], estimate_richness(f, measures=c("InvSimpson"
        rename(var=var.x, y=InvSimpson)%>%
        select(1,4,5,6,3,2) %>% as_tibble(.)
 
-rs$alf <- alf
+rs$alf <- alf # append to db list
 rm(alf)
-# beta diversity will not go on the list
+
+# beta diversity (will not go on the list)
 betf <- vegdist(otu_table(f), method = "jac", binary = T)%>%
         metaMDS(., parallel=2, trace=F, weakties=T)
 
@@ -65,22 +50,14 @@ ford <- gg_ordiplot(betf, groups = f_tr$dl, hull = F, label = F,
          mutate_at('potID', as.numeric)%>%
          left_join(.,f_tr, by="potID") %>% select(-Group)
 
-rm(betf, f_tr, f)
+rm(betf)
 ## Plots
 
-# Mymodels=function(rc, fml="gaussian"){
-#   models=list(
-#     linear=gam(data = rc, formula=y~x, family = fml, method="REML"),
-#     gm=gam(data = rc, formula = y~s(x), family = fml, method="REML"), 
-#     stegmented=chngptm(formula.1 = y~1, formula.2 = ~x, data = rc, type="stegmented", family = fml, REML = T), # removed argument: #, chngpt.init = 0.7#
-#     stepm=chngptm(formula.1 = y~1, formula.2 = ~x,data = rc, type="step", family = fml, REML = T),
-#     segmented=chngptm(formula.1 = y~1, formula.2 = ~x,data = rc, type="segmented", family = fml, REML = T))
-# }
-
+# function for plots
 Myplotsc=function(df, fml, laby){
            plot=list(ggplot()+
                      geom_point(data=df, aes(x=x, y=y, colour=z))+
-                     geom_smooth(data=df, aes(x=x, y=y), method = "gam", formula = y ~ s(x), 
+                     geom_smooth(data=df, aes(x=x, y=y), method = "gam", formula = y ~ s(x, k=3), 
                             method.args=list(family=fml),
                             se=TRUE, color="Black")+
                      scale_x_continuous(breaks = c(1, 3,5,7,9,11,13,15))+
@@ -90,13 +67,12 @@ Myplotsc=function(df, fml, laby){
                            panel.grid.minor = element_blank()))
 }
 
-fml <- list('gaussian', 'gaussian', 'gaussian',
-         'binomial', 'gaussian')
+fml <- list('gaussian', 'gaussian', 'poisson',
+         'betar', 'gaussian')
 laby <- list('Log of copy number per g of soil', 'Mean weight diameter (mm)', 'Water drop penetration time (sec.)',
-          'Water holding capacity', 'Inverse Simpson index (ASVs)')
+          'Fraction of water stable aggregates', 'Inverse Simpson index (ASVs)')
 
 pl <- mapply(Myplotsc, rs, fml, laby)
-
 
 ord <- ggplot() + 
             geom_vline(xintercept=0.0, color="White", linewidth=1, linetype=1)+
@@ -111,7 +87,42 @@ ord <- ggplot() +
                   panel.border = element_rect(colour = "Black", fill = F),
                   panel.grid = element_blank())        
 
-pl$ord <- ord
+pl$ord <- ord # append ordination plot to list
 
 (fig1 <- ggarrange(pl$mwd, pl$wsa, pl$imp, pl$cf, pl$alf, pl$ord, ncol = 3, nrow = 2,
-                  common.legend = T, legend = "right"))
+                  common.legend = T, legend = "right", labels = c('a', 'b', 'c', 'd', 'e', 'f')))
+
+# function for GAMS
+
+Mymodsc=function(df, fml){
+  plot=list(mod=gam(data = df, formula = y~s(x, k=3), family = fml, method="REML"))
+}
+
+mds <- mapply(Mymodsc, rs, fml)
+
+sm <- lapply(mds, summary)%>% # get model summary
+      lapply(., '[[', 's.table')%>% # extract s.table
+      imap_dfr(., ~ bind_cols(mod = .y,  edf = .x[,1], ref.df = .x[,2], 
+                              Fval = round(.x[,3], 3), pval = round(.x[,4], 3))) # format stats
+
+# check diagnostics 
+#overview(mds$alf.mod)
+check <- function(b, k.sample = 5000, k.rep = 200) {
+  mgcv:::k.check(b, subsample = k.sample, n.rep = k.rep)
+}
+
+chs <- lapply(mds, check)%>%
+       imap_dfr(., ~ bind_cols(mod = .y,  k = .x[,1], edf = .x[,2], 
+                          kindex = round(.x[,3], 3), pval = round(.x[,4], 3))) # format stats
+
+appraise(mds$cf.mod, method = "simulate", n_simulate = 1000)
+appraise(mds$mwd.mod, method = "simulate", n_simulate = 1000)
+appraise(mds$imp.mod, method = "simulate", n_simulate = 1000)
+appraise(mds$wsa.mod, method = "simulate", n_simulate = 1000)
+appraise(mds$alf.mod, method = "simulate", n_simulate = 1000)
+
+#kable(sm, format = "simple", caption = "Table 1", digits = 3)
+write_csv(sm, "table1")
+
+#Multivariate
+adonis2(otu_table(f)~f_tr$dl, permutations = 999, method = 'jac', binary=T, by="margin")
