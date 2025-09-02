@@ -8,7 +8,7 @@ vapply(pkgs, FUN = library, FUN.VALUE = logical(1L), logical.return = TRUE, char
 # Figure 1 ------ Control soil
 
 ## load data, pivot and store on a list
-rs <- read_delim("rs_db", delim = ",") %>% 
+rs <- read_delim("rs_db.csv", delim = ",") %>% 
        filter(treatment%in%"Ctrl")%>%
        pivot_longer(
        cols = 7:10,
@@ -16,9 +16,10 @@ rs <- read_delim("rs_db", delim = ",") %>%
        values_to = "y")%>%
        select(potID, dl, whc, no_poll, var, y)%>%
        rename(x=dl, z=whc)%>%
+       filter(!is.na(y))%>%
        group_split(var)%>% # split into several databases by treatment and store on a list
-       set_names(., nm = c("cf", "mwd", "imp", "wsa")) #give names to each set  
-
+       set_names(., nm = c("cf", "mwd", "imp", "wsa"))%>% #give names to each set  
+       as.list(.)
 # community data
 f <- readRDS("RS_all.rds")%>% 
      subset_taxa(., Kingdom=="Fungi")%>% # eliminate non target organisms
@@ -28,7 +29,7 @@ f <- readRDS("RS_all.rds")%>%
 # alpha diversity
 alf <- cbind(sample_data(f)[,c(1)], estimate_richness(f, measures=c("InvSimpson")))%>%
        mutate(var=rep("invsimp",44))%>%
-       right_join(.,rs[["cf"]], by="potID")%>%
+       right_join(.,rs[["cf"]], by="potID")%>% #fixed 
        select(-c(y, var.y))%>%
        rename(var=var.x, y=InvSimpson)%>%
        select(1,4,5,6,3,2) %>% as_tibble(.)
@@ -57,13 +58,30 @@ rm(betf)
 Mymodsc=function(df, fml){
         # fits a GAM to each dataset on a list in df with max 3 base functions
         # returns a list of named gams.
-        # argument fml is a character vector and must be provided separately
-         md=list(mod=gam(data = df, formula = y~s(x, bs="tp", k=3), family = fml, method="REML"))
+        # argument fml is a string list stating the family of the conditional prob. and must be provided separately
+        md=list(gm=gam(data = df, formula = y~s(x, bs="tp", k=3), family = fml, method="REML"))#,
+                #linear=gam(data = df, formula = y~x, family = fml, method="REML"))
 }
 fml <- list('gaussian', 'gaussian', 'poisson',
             'betar', 'gaussian')
 
 mds <- mapply(Mymodsc, rs, fml) # iteratively apply Mymodsc
+
+# Mymodsc <- function(df, fml) {
+#   # make sure family is turned into a family object
+#   #fam <- match.fun(fml)()
+#   
+#   # first set of models
+#   set1 <- list(
+#     gm     = gam(y ~ s(x, bs = "tp", k = 3), data = df, family = fml, method = "REML"),
+#     linear = gam(y ~ x, data = df, family = fml, method = "REML")
+#   )
+#   
+#    # return nested list
+#   list(set1 = set1)
+# }
+
+
 
 sm <- lapply(mds, summary)%>% # get each model summary
       lapply(., '[[', 's.table')%>% # extract each s.table
@@ -83,11 +101,11 @@ chs <- lapply(mds, check)%>%
   imap_dfr(., ~ bind_cols(mod = .y,  k = .x[,1], edf = .x[,2], 
                           kindex = round(.x[,3], 3), pval = round(.x[,4], 3))) # format stats
 
-appraise(mds$cf.mod, method = "simulate", n_simulate = 1000)
-appraise(mds$mwd.mod, method = "simulate", n_simulate = 1000)
-appraise(mds$imp.mod, method = "simulate", n_simulate = 1000)
-appraise(mds$wsa.mod, method = "simulate", n_simulate = 1000)
-appraise(mds$alf.mod, method = "simulate", n_simulate = 1000)
+appraise(mds$cf.gm, method = "simulate", n_simulate = 1000)
+appraise(mds$mwd.gm, method = "simulate", n_simulate = 1000)
+appraise(mds$imp.gm, method = "simulate", n_simulate = 1000)
+appraise(mds$wsa.gm, method = "simulate", n_simulate = 1000)
+appraise(mds$alf.gm, method = "simulate", n_simulate = 1000)
 
 # Multivariate Model (PERMANOVA)
 adonis2(otu_table(f)~f_tr$dl, permutations = 999, method = 'jac', binary=T, by="margin")
