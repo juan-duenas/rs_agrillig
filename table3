@@ -1,6 +1,9 @@
-mod,edf,ref.df,Fval,pval
-cf.gm,4.995598500241451,12,2.475,0
-mwd.gm,11.456929227516266,12,32.89,0
-imp.gm,9.568841204540814,12,239.869,0
-wsa.gm,4.060873552380583,12,9.53,0.02
-alf.gm,4.476948523416933,12,1.055,0.007
+mod,term,bet,StdE,tval,pval
+alf.gm,(Intercept),0.058,0.003,20.147,0
+alf.gm,pBasidiomycota,0.091,0.008,11.405,0
+alf.gm,pMortierellomycota,0.253,0.016,15.95,0
+alf.gm,pMucoromycota,0.404,0.023,17.472,0
+bet.gm,(Intercept),-0.859,0.052,-16.53,0
+bet.gm,pBasidiomycota,1.068,0.071,15.099,0
+bet.gm,pMortierellomycota,-1.439,0.103,-13.936,0
+bet.gm,pMucoromycota,-1.185,0.112,-10.554,0
