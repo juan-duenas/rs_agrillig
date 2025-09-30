@@ -153,16 +153,14 @@ se <- Myse(mds=mds, df=rs, i=5)
 Myplotsc=function(df, fml, laby, se){
            plot=list(ggplot()+
                      geom_point(data=df, aes(x=x, y=y, colour=z))+
-                     # geom_smooth(data=df, aes(x=x, y=y), method = "gam", formula = y ~ s(x, bs="tp", k=3), 
-                     #        method.args=list(family=fml),
-                     #        se=T, color="Black")+
                      geom_line(data=se, aes(x=x, y=fit), inherit.aes = F)+ # use fit estimated by predict
                      geom_ribbon(data=se,                                  # estimate alpha=95% Credible Intervals
                                    aes(x=x, ymin = fit- 1.96*(se.fit), ymax = fit + 1.96*(se.fit)), 
                                    alpha = 0.5, fill = "Grey", inherit.aes = F)+ # this constant comes from qnorm((1-0.95)/2, lower.tail = F)
-                     scale_x_continuous(breaks = c(1, 3,5,7,9,11,13,15))+
+                     scale_x_continuous(breaks = c(1,3,5,7,9,11,13,15))+
                      scale_colour_viridis_c(option="E", direction = -1)+
                      labs(y=laby, x="Dryness level", colour="WHC %")+
+                     theme_bw()+
                      theme(text = element_text(size = 12),
                            panel.grid.minor = element_blank()))
 }
@@ -187,11 +185,12 @@ ford <- gg_ordiplot(betf, groups = f_tr$dl, hull = F, label = F,
 rm(betf)
 
 ord <- ggplot() + 
-            geom_vline(xintercept=0.0, color="White", linewidth=1, linetype=1)+
-            geom_hline(yintercept=0.0, color="White", linewidth=1, linetype=1)+    
+            geom_vline(xintercept=0.0, color="Grey", linewidth=1, linetype=1)+
+            geom_hline(yintercept=0.0, color="Grey", linewidth=1, linetype=1)+    
             geom_point(data=ford, aes(x=x, y=y, color=z), alpha=0.8,  size=2, show.legend = T) +
             scale_colour_viridis_c(option = "E", direction = -1)+
             labs(x="Axis 1", y="Axis 2", color="WHC %")+
+            theme_bw()+
             theme(axis.title = element_text(size = 12),
                   legend.key = element_blank(),  #removes the box around each legend item
                   legend.position = "right", #legend at the bottom
@@ -203,148 +202,6 @@ pl$ord <- ord # append ordination plot to list
 
 (fig1 <- ggarrange(pl$mwd, pl$wsa, pl$imp, pl$cf, pl$alf, pl$ord, ncol = 3, nrow = 2,
                   common.legend = T, legend = "right", labels = c('a', 'b', 'c', 'd', 'e', 'f')))
-
-rm(list = setdiff(ls(), c("fig.1")))
-
-# Figure S1, and tables ------- Fungal communities in control ####
-
-## load data, pivot and store on a list 
-rs <- read_delim("rs_db.csv", delim = ",") %>% 
-      filter(treatment%in%"Ctrl")%>%
-      pivot_longer(
-      cols = 7:10,
-      names_to = "var",
-      values_to = "y")%>%
-      select(potID, dl, whc, no_poll, var, y)%>%
-      rename(x=dl, z=whc)%>%
-      filter(!is.na(y))%>%
-      group_split(var)%>% # split into several databases by treatment and store on a list
-      set_names(., nm = c("cf", "mwd", "imp", "wsa"))%>% #give names to each set  
-      as.list(.)
-
-# community data
-f <- readRDS("RS_all.rds")%>% 
-     subset_taxa(., Kingdom=="Fungi")%>% # eliminate non target organisms
-     filter_taxa(., function(x) sum(x) > 0, TRUE)%>% # keep variants with more than 0 reads
-     subset_samples(., treatment%in%c("ctrl")) # ignore warning
-
-#subset per Phyla
-a=subset_taxa(f, Phylum=="Ascomycota")
-b=subset_taxa(f, Phylum=="Basidiomycota")
-c=subset_taxa(f, Phylum=="Mortierellomycota")
-d=subset_taxa(f, Phylum=="Mucoromycota")
-
-# alpha diversity per phyla
-
-alf.a <- cbind(sample_data(a)[,c(1)], estimate_richness(a, measures=c("InvSimpson")))%>%rename(Ascomycota=InvSimpson)
-alf.b <- cbind(sample_data(b)[,c(1)], estimate_richness(b, measures=c("InvSimpson")))%>%rename(Basidiomycota=InvSimpson)
-alf.c <- cbind(sample_data(c)[,c(1)], estimate_richness(c, measures=c("InvSimpson")))%>%rename(Mortierellomycota=InvSimpson)
-alf.d <- cbind(sample_data(d)[,c(1)], estimate_richness(d, measures=c("InvSimpson")))%>%rename(Mucoromycota=InvSimpson)
-tl <- list(alf.a, alf.b, alf.c, alf.d) 
-
-alf_p <- reduce(tl, full_join, by="potID")%>%
-         right_join(.,rs[["cf"]], by="potID")%>% 
-         select(1:8)%>%
-         pivot_longer(
-              cols = 2:5,
-              names_to = "p",
-              values_to = "y")%>%
-         filter(!is.na(y)) %>%
-         mutate_at('p', as.factor)%>%
-         as_tibble(.) 
-
-rm(alf.a, alf.b, alf.c, alf.d, tl)
-
-# beta diversity - relative abundance phylum
-ra_p = psmelt(f) %>% select(potID, Abundance, moistureL, whc, Phylum) %>% #melt and select columns that I am interested in
-       group_by(potID, moistureL, whc, Phylum) %>%
-       summarize(abund = sum(Abundance)) %>%
-       mutate(ra = abund / sum(abund)) %>%
-       filter(ra>0.05) %>%
-       ungroup(.)%>% rename(x=moistureL, z=whc, p=Phylum, y=ra) %>% 
-       mutate_at('p', as.factor) %>% as_tibble(.)
-
-# beta diversity - relative abundance guild
-# ra_g = psmelt(f) %>% select(potID, Abundance, moistureL, whc, Guild) %>% #melt and select columns that I am interested in
-#                      group_by(potID, moistureL, whc, Guild) %>%
-#                      summarize(abund = sum(Abundance)) %>%
-#                      mutate(ra = abund / sum(abund)) %>%
-#                      ungroup()%>% as_tibble()%>%
-#                      rename(x=moistureL, z=whc, p=Guild, y=ra) %>%
-#                      mutate_at('p', as.factor)
-
-
-cd <- list(alf=alf_p, bet=ra_p)
-rm(ra_p, alf_p, a, b, c, d)           
-# function for Models (GAMS)
-
-Mygamsc=function(df, fml, k){
-  # fits a GAM to each dataset on a list in df with max 3 base functions
-  # returns a list of named gams.
-  # argument fml is a string list stating the family of the conditional prob. and must be provided separately
-  md=list(gm=gam(data = df, formula = y ~ p + s(x, by=p, k=k), family = fml, method="REML", select = T))
-}
-
-fml <- list('Gamma', 'betar')
-
-gmsp <- mapply(Mygamsc, cd, fml, 3) # iteratively apply Mygamsc
-
-sm <- lapply(gmsp, summary)%>% # get each model summary
-      lapply(., '[[', 's.table')%>% # extract each s.table
-      imap_dfr(., ~ bind_cols(mod = .y,  edf = .x[,1], ref.df = .x[,2], 
-                          Fval = round(.x[,3], 3), pval = round(.x[,4], 3))) # format stats
-
-pm <- lapply(gmsp, summary)%>% # get each model summary
-      lapply(., '[[', 'p.table')%>%
-      imap_dfr(., ~ bind_cols(mod = .y, term = rownames(.x), bet = round(.x[,1], 3), StdE = round(.x[,2],3), 
-                          tval = round(.x[,3], 3), pval = round(.x[,4], 3)))#%>% # format stats
-
-# Tables
-kable(sm, format = "simple", caption = "Table 2", digits = 3) # pretty simple table
-kable(pm, format = "simple", caption = "Table 3", digits = 3) # pretty simple table
-write_csv(sm, "table2") # good old way to save results
-write_csv(pm, "table3") # good old way to save results
-
-# check model fit with diagnostics 
-appraise(gmsp$alf.gm, method = "simulate", n_simulate = 1000)
-appraise(gmsp$bet.gm, method = "simulate", n_simulate = 1000)
-#appraise(gmsp$gld.gm, method = "simulate", n_simulate = 1000)
-
-# Plots
-# estimate uncertainty around fits
-Myse <- function(mds, df, i){
-  # function to extract the fit and standard error in the response scale
-  # models are the list of models defined by Mymodsc
-  # df is the list of data.frames that contain the predictor needed to pass to function predict
-  # i is the number of iterations of this routine = number of datasets/models
-  nd <- lapply(df, function(y) with(y, tibble(x = seq(min(x),max(x), length.out=length(x)), p=p)))
-  fit <- lapply(mds, function(x){do.call(cbind, predict(x, nd[[i]], type='response', se.fit=T, unconditional=T))})
-  fit2 <- lapply(fit, function(x){cbind(x, nd[[i]])})
-}
-se <- Myse(mds=gmsp, df=cd, i=2)
-
-# function for plots
-Myplotsc=function(df, fml, laby, se){
-  
-  plot=list(ggplot(data=df, aes(x=x, y=y, colour = z))+
-              geom_point(alpha=0.5)+
-              geom_line(data=se, aes(x=x, y=fit, linetype = p), linewidth=0.5, inherit.aes = F)+ # use fit estimated by predict
-              scale_x_continuous(breaks = c(1,3,5,7,9,11,13,15))+
-              #scale_color_manual(values=colrs)+
-              scale_colour_viridis_c(option = "E", direction = -1)+
-              labs(y=laby, x="Dryness level", colour="WHC %", linetype="Group ID")+
-              theme_bw()+
-              theme(text = element_text(size = 12),
-                    panel.grid.minor = element_blank()))
-}
-
-laby <- list('Inverse Simpson index (ASVs)', 'Relative abundance of reads')
-
-pl <- mapply(Myplotsc, cd, fml, laby, se)
-
-(figs1 <- ggarrange(pl$alf, pl$bet, ncol = 2, nrow = 1,
-                    common.legend = T, legend = "right", labels = c('a', 'b')))
-
 
 # Figure 2 -------------------- Thresholds control soil  ####
 
@@ -502,8 +359,152 @@ colrs <- RColorBrewer::brewer.pal(3, "Set2")
              scale_x_continuous(breaks = c(1,3,5,7,9,11,13,15))+
              scale_y_continuous(name = 'Mean weight diameter (mm)', sec.axis = sec_axis(transform=~./10, name='Water drop penetration time (sec./10)'))+
              labs(x="Dryness level")+
+             theme_bw()+
              theme(text = element_text(size = 12),
                     panel.grid.minor = element_blank()))
+# Figure S1, and tables ------- Fungal communities in control ####
+
+## load data, pivot and store on a list 
+rs <- read_delim("rs_db.csv", delim = ",") %>% 
+  filter(treatment%in%"Ctrl")%>%
+  pivot_longer(
+    cols = 7:10,
+    names_to = "var",
+    values_to = "y")%>%
+  select(potID, dl, whc, no_poll, var, y)%>%
+  rename(x=dl, z=whc)%>%
+  filter(!is.na(y))%>%
+  group_split(var)%>% # split into several databases by treatment and store on a list
+  set_names(., nm = c("cf", "mwd", "imp", "wsa"))%>% #give names to each set  
+  as.list(.)
+
+# community data
+f <- readRDS("RS_all.rds")%>% 
+     subset_taxa(., Kingdom=="Fungi")%>% # eliminate non target organisms
+     filter_taxa(., function(x) sum(x) > 0, TRUE)%>% # keep variants with more than 0 reads
+     subset_samples(., treatment%in%c("ctrl")) # ignore warning
+
+#subset per Phyla
+a=subset_taxa(f, Phylum=="Ascomycota")
+b=subset_taxa(f, Phylum=="Basidiomycota")
+c=subset_taxa(f, Phylum=="Mortierellomycota")
+d=subset_taxa(f, Phylum=="Mucoromycota")
+
+# alpha diversity per phyla
+
+alf.a <- cbind(sample_data(a)[,c(1)], estimate_richness(a, measures=c("InvSimpson")))%>%rename(Ascomycota=InvSimpson)
+alf.b <- cbind(sample_data(b)[,c(1)], estimate_richness(b, measures=c("InvSimpson")))%>%rename(Basidiomycota=InvSimpson)
+alf.c <- cbind(sample_data(c)[,c(1)], estimate_richness(c, measures=c("InvSimpson")))%>%rename(Mortierellomycota=InvSimpson)
+alf.d <- cbind(sample_data(d)[,c(1)], estimate_richness(d, measures=c("InvSimpson")))%>%rename(Mucoromycota=InvSimpson)
+tl <- list(alf.a, alf.b, alf.c, alf.d) 
+
+alf_p <- reduce(tl, full_join, by="potID")%>%
+  right_join(.,rs[["cf"]], by="potID")%>% 
+  select(1:8)%>%
+  pivot_longer(
+    cols = 2:5,
+    names_to = "p",
+    values_to = "y")%>%
+  filter(!is.na(y)) %>%
+  mutate_at('p', as.factor)%>%
+  as_tibble(.) 
+
+rm(alf.a, alf.b, alf.c, alf.d, tl)
+
+# beta diversity - relative abundance phylum
+ra_p = psmelt(f) %>% select(potID, Abundance, moistureL, whc, Phylum) %>% #melt and select columns that I am interested in
+  group_by(potID, moistureL, whc, Phylum) %>%
+  summarize(abund = sum(Abundance)) %>%
+  mutate(ra = abund / sum(abund)) %>%
+  filter(ra>0.05) %>%
+  ungroup(.)%>% rename(x=moistureL, z=whc, p=Phylum, y=ra) %>% 
+  mutate_at('p', as.factor) %>% as_tibble(.)
+
+# beta diversity - relative abundance guild
+# ra_g = psmelt(f) %>% select(potID, Abundance, moistureL, whc, Guild) %>% #melt and select columns that I am interested in
+#                      group_by(potID, moistureL, whc, Guild) %>%
+#                      summarize(abund = sum(Abundance)) %>%
+#                      mutate(ra = abund / sum(abund)) %>%
+#                      ungroup()%>% as_tibble()%>%
+#                      rename(x=moistureL, z=whc, p=Guild, y=ra) %>%
+#                      mutate_at('p', as.factor)
+cd <- list(alf=alf_p, bet=ra_p)
+rm(ra_p, alf_p, a, b, c, d)           
+# function for Models (GAMS)
+
+Mygamsc=function(df, fml, k){
+  # fits a GAM to each dataset on a list in df with max 3 base functions
+  # returns a list of named gams.
+  # argument fml is a string list stating the family of the conditional prob. and must be provided separately
+  md=list(gm=gam(data = df, formula = y ~ p + s(x, by=p, k=k), family = fml, method="REML", select = T))
+}
+
+fml <- list('Gamma', 'betar')
+
+gmsp <- mapply(Mygamsc, cd, fml, 3) # iteratively apply Mygamsc
+
+sm <- lapply(gmsp, summary)%>% # get each model summary
+  lapply(., '[[', 's.table')%>% # extract each s.table
+  imap_dfr(., ~ bind_cols(mod = .y,  edf = .x[,1], ref.df = .x[,2], 
+                          Fval = round(.x[,3], 3), pval = round(.x[,4], 3))) # format stats
+
+pm <- lapply(gmsp, summary)%>% # get each model summary
+  lapply(., '[[', 'p.table')%>%
+  imap_dfr(., ~ bind_cols(mod = .y, term = rownames(.x), bet = round(.x[,1], 3), StdE = round(.x[,2],3), 
+                          tval = round(.x[,3], 3), pval = round(.x[,4], 3)))#%>% # format stats
+
+# Tables
+kable(sm, format = "simple", caption = "Table 2", digits = 3) # pretty simple table
+kable(pm, format = "simple", caption = "Table 3", digits = 3) # pretty simple table
+write_csv(sm, "table2") # good old way to save results
+write_csv(pm, "table3") # good old way to save results
+
+# check model fit with diagnostics 
+appraise(gmsp$alf.gm, method = "simulate", n_simulate = 1000)
+appraise(gmsp$bet.gm, method = "simulate", n_simulate = 1000)
+#appraise(gmsp$gld.gm, method = "simulate", n_simulate = 1000)
+
+# Plots
+# estimate uncertainty around fits
+Myse <- function(mds, df, i){
+  # function to extract the fit and standard error in the response scale
+  # models are the list of models defined by Mymodsc
+  # df is the list of data.frames that contain the predictor needed to pass to function predict
+  # i is the number of iterations of this routine = number of datasets/models
+  nd <- lapply(df, function(y) with(y, expand.grid(x = evenly(x, n=100), p=levels(p))))
+  fit <- lapply(mds, function(x){do.call(tibble, predict(x, nd[[i]], type='response', se.fit=T, unconditional=T))})
+  fit2 <- lapply(fit, function(x){cbind(x, nd[[i]])})
+}
+se <- Myse(mds=gmsp, df=cd, i=2)
+
+# function for plots
+Myplotsc=function(df, fml, laby, se){
+  clrs <- viridis::viridis(3, option = "E", direction = -1)  
+  plot=list(ggplot(data=df, aes(x=x, y=y, colour = z))+
+              annotate("rect", xmin=0.9,xmax=5.9,ymin=0,ymax=Inf, fill=alpha(clrs[3], 0.2), colour=NA)+
+              annotate("rect", xmin=5.9,xmax=9.1,ymin=0,ymax=Inf, fill=alpha(clrs[2], 0.2), colour=NA)+
+              annotate("rect", xmin=9.1,xmax=15.2,ymin=0,ymax=Inf, fill=alpha(clrs[1], 0.2), colour=NA)+
+              geom_point(alpha=0.5)+
+              geom_line(data=se, aes(x=x, y=fit, linetype = p), linewidth=0.5, inherit.aes = F)+ # use fit estimated by predict
+              geom_ribbon(data=se,                                  # estimate alpha=95% Credible Intervals
+                          aes(x=x, ymin = fit- 1.96*(se.fit), ymax = fit + 1.96*(se.fit), group = p), 
+                          alpha = 0.5, fill = "Grey", inherit.aes = F)+ # this constant comes from qnorm((1-0.95)/2, lower.tail = F)
+              scale_x_continuous(breaks = c(1,3,5,7,9,11,13,15))+
+              #scale_color_manual(values=colrs)+
+              scale_colour_viridis_c(option = "E", direction = -1)+
+              labs(y=laby, x="Dryness level", colour="WHC %", linetype="Group ID")+
+              theme_bw()+
+              theme(text = element_text(size = 12),
+                    panel.grid.minor = element_blank()))
+}
+
+laby <- list('Inverse Simpson index (ASVs)', 'Relative abundance of reads')
+
+pl <- mapply(Myplotsc, cd, fml, laby, se)
+
+(figs1 <- ggarrange(pl$alf, pl$bet, ncol = 2, nrow = 1,
+                    common.legend = T, legend = "right", labels = c('a', 'b')))
+
 
 # Figure 3, figs2 and tables -- Single factor effects ####
 
@@ -560,7 +561,8 @@ f_tr <- sample_data(f)[,c(1,2,3,4)] %>% data.frame(.) %>% rename(t=treatment, m=
         mutate(p=case_when(m < 6 ~ "Wet",
                            m < 10  ~ "Medium",
                            m >= 10 ~ "Dry" )) %>%
-        mutate(p=fct_relevel(p, c("Wet", "Medium", "Dry")))
+        mutate(p=fct_relevel(p, c("Wet", "Medium", "Dry")))%>%
+        pivot_wider(names_from = t, values_from = t, values_fn = ~1, values_fill = 0 )
 
 # Model selection
 
@@ -628,7 +630,8 @@ gms <- mapply(Mygamsc, rs, fml, 3) # iteratively apply Mygamsc
 sm <- lapply(gms, summary)%>% # get each model summary
       lapply(., '[[', 's.table')%>% # extract each s.table
       imap_dfr(., ~ bind_cols(mod = .y,  edf = .x[,1], ref.df = .x[,2], 
-                          Fval = round(.x[,3], 3), pval = round(.x[,4], 3))) # format stats
+                          Fval = round(.x[,3], 3), pval = round(.x[,4], 3)))%>% # format stats
+      mutate(term=rep(c("Ctrl", "Copper","µPlastic", "Nitrogen", "Salinity", "Surfactant"),5)) 
 
 pm <- lapply(gms, summary)%>% # get each model summary parametric part
       lapply(., '[[', 'p.table')%>%
@@ -659,7 +662,10 @@ appraise(gms$alf.gm, method = "simulate", n_simulate = 1000)
 
 # Permanovas
 # Multivariate Model (PERMANOVA)
-adonis2(otu_table(f)~f_tr$m*f_tr$t, permutations = 999, method = 'jac', binary=T, by="term")
+adonis2(otu_table(f)~f_tr$ctrl+f_tr$mp+f_tr$sdbs+f_tr$cu+f_tr$n+f_tr$nacl, permutations = 9999, 
+        method = 'jac', binary=T, by="term", parallel=2) # only surfactant
+adonis2(otu_table(f)~f_tr$m*f_tr$sdbs, permutations = 9999, 
+        method = 'jac', binary=T, by="term", parallel=2) # test interaction
 
 # Plots
 # estimate uncertainty around fits
@@ -668,8 +674,8 @@ Myse <- function(mds, df, i){
   # models are the list of models defined by Mymodsc
   # df is the list of data.frames that contain the predictor needed to pass to function predict
   # i is the number of iterations of this routine = number of datasets/models
-  nd <- lapply(df, function(y) with(y, tibble(x = seq(min(x),max(x), length.out=length(x)), t=t)))
-  fit <- lapply(mds, function(x){do.call(cbind, predict(x, nd[[i]], type='response', se.fit=T, unconditional=T))})
+  nd <- lapply(df, function(y) with(y, expand.grid(x = evenly(x, n=100), t=levels(t))))
+  fit <- lapply(mds, function(x){do.call(tibble, predict(x, nd[[i]], type='response', se.fit=T, unconditional=T))})
   fit2 <- lapply(fit, function(x){cbind(x, nd[[i]])})
 }
 se <- Myse(mds=gms, df=rs, i=5)
@@ -693,61 +699,66 @@ Myplotsc=function(df, fml, laby, se){
                     panel.grid.minor = element_blank()))
 }
 
-laby <- list('Log of copy number per g of soil', 'Mean weight diameter (mm)', 'Water drop penetration time (sec.)',
-             'Fraction of water stable aggregates', 'Inverse Simpson index (ASVs)')
+laby <- list('Log(cop. g-1)', 'MWD (mm)', 'WDPT (sec.)',
+             'WSA', '1/D (ASVs)')
 
 pl <- mapply(Myplotsc, rs, fml, laby, se)
 
-pl$cf <- pl$cf + coord_cartesian(ylim=c(22, 25)) # zooms in without losing the background of thresholds
-pl$alf <- pl$alf + guides(colour='none', linetype='none') # get rid of repeated legend
-
+pl$cf <- pl$cf + coord_cartesian(ylim=c(23, 24.26)) # zooms in without losing the background of thresholds
 
 # Plot ordinations
 # beta diversity 
 # points for NMDS
-ford <- gg_ordiplot(betf, groups = f_tr$t, hull = F, label = F,
+fs <- subset_samples(f, treatment%in%c('ctrl','sdbs'))
+betf <- vegdist(otu_table(fs), method = "jac", binary = T)%>%
+  metaMDS(., parallel=2, trace=F, weakties=T)
+
+f_trs <- sample_data(fs)[,c(1,2,3,4)] %>% data.frame(.) %>% rename(t=treatment, m=moistureL, z=whc) %>%
+        mutate_at('t', as.factor)%>%
+        mutate(t=fct_recode(t, Ctrl='ctrl', Surfactant='sdbs'))%>%
+        mutate(p=case_when(m < 6 ~ "Wet",
+                     m < 10  ~ "Medium",
+                     m >= 10 ~ "Dry" )) %>%
+        mutate(p=fct_relevel(p, c("Wet", "Medium", "Dry")))
+
+ford <- gg_ordiplot(betf, groups = f_trs$m, hull = F, label = F,
                     spiders = F, ellipse = F, plot = F, choices = c(1, 2), scaling=1)%>%
         pluck('df_ord')%>%
         rownames_to_column("potID")%>%
         mutate_at('potID', as.numeric)%>%
-        left_join(.,f_tr, by="potID") %>% select(-Group)%>%filter(p%notin%c('Medium'))
+        left_join(.,f_trs, by="potID") %>% select(-Group)
 
 # Spider for NMDS
-# sord <- gg_ordiplot(betf, groups = f_tr$t, hull = F, label = F,
-#                     spiders = T, ellipse = F, plot = F, choices = c(1, 2), scaling=1)%>%
-#         pluck('df_spiders')%>%
-#         rownames_to_column("potID")%>%
-#         mutate_at('potID', as.numeric)%>%
-#         left_join(.,f_tr, by="potID") %>% select(-Group)%>%filter(p%notin%c('Medium'))
+sord <- gg_ordiplot(betf, groups = f_trs$t, hull = F, label = F,
+                    spiders = T, ellipse = F, plot = F, choices = c(1, 2), scaling=1)%>%
+        pluck('df_spiders')%>%
+        rownames_to_column("potID")%>%
+        mutate_at('potID', as.numeric)%>%
+        left_join(.,f_tr, by="potID") %>% select(-Group)#%>%filter(p%notin%c('Medium'))
 
 #ordination
 clrs <- viridis::viridis(3, option = "E", direction = 1)
 ord <- ggplot() + 
        geom_vline(xintercept=0.0, color="Grey", linewidth=1, linetype=1)+
        geom_hline(yintercept=0.0, color="Grey", linewidth=1, linetype=1)+    
-       geom_point(data=ford, aes(x=x, y=y, colour=p, shape = t), alpha=0.8,  size=2, show.legend = T) +
+       geom_point(data=ford, aes(x=x, y=y, colour=p, shape=t), alpha=0.8,  size=2, show.legend = T) +
        #geom_segment(data = sord, mapping = aes(x = cntr.x, y = cntr.x, xend= x, yend = y), alpha=0.2)+
-       scale_color_manual(values=clrs[c(1,3)])+
+       scale_color_manual(values=clrs[c(1,2,3)])+
        #scale_colour_viridis_c(option = "E", direction = -1)+
-       labs(x="Axis 1", y="Axis 2", color="Phase", shape="ID of Pollutants")+
+       facet_wrap(.~t)+
+       labs(x="Axis 1", y="Axis 2", color="Phase", shape="")+
        theme_bw()+
        theme(axis.title = element_text(size = 12),
              legend.key = element_blank(),  #removes the box around each legend item
-             legend.position = "right", #legend position
+             legend.position = "bottom", #legend position
              legend.text = element_text(size=12),
              panel.border = element_rect(colour = "Black", fill = F),
              panel.grid = element_blank())    
 
-pl$ord <- ord # append ordination plot to list
-
-(p1 <- ggarrange(pl$mwd, pl$imp, ncol = 2, nrow = 1,
-                 common.legend = T, legend = "top", labels = c('a', 'b')))
-(p2 <-ggarrange(pl$alf, pl$ord, ncol = 2, nrow = 1, 
-                common.legend = F, legend = "bottom", labels = c('c', 'd')))  
-
-(fig3 <- ggarrange(p1, p2, common.legend = F, ncol = 1, nrow = 2))
-(figs2 <- ggarrange(pl$cf, pl$wsa, ncol=2, nrow=1, 
-                    common.legend = T, legend = "right", labels = c('a', 'b')))
+(fig3 <- ggarrange(pl$mwd, pl$imp, pl$cf, pl$alf, ncol = 2, nrow = 2,
+                 common.legend = T, legend = "right", labels = c('a', 'b', 'c', 'd')))
+(figs2 <- ggarrange(pl$wsa, ord, ncol = 1, nrow = 2, 
+                common.legend = F, legend = "right", labels = c('a', 'b')))  
 # Figure 4, figs3 and tables -- Multiple factor effects  ####
 '%notin%' <- Negate('%in%') # useful custom function to filter out
 # load data and select all treatments except for control
@@ -855,8 +866,8 @@ Myse <- function(mds, df, i){
   # models are the list of models defined by Mymodsc
   # df is the list of data.frames that contain the predictor needed to pass to function predict
   # i is the number of iterations of this routine = number of datasets/models
-  nd <- lapply(df, function(y) with(y, tibble(x = seq(min(x),max(x), length.out=length(x)), n=n)))
-  fit <- lapply(mds, function(x){do.call(cbind, predict(x, nd[[i]], type='response', se.fit=T, unconditional=T))})
+  nd <- lapply(df, function(y) with(y, expand.grid(x = evenly(x, n=100), n=levels(n))))
+  fit <- lapply(mds, function(x){do.call(tibble, predict(x, nd[[i]], type='response', se.fit=T, unconditional=T))})
   fit2 <- lapply(fit, function(x){cbind(x, nd[[i]])})
 }
 se <- Myse(mds=gms, df=rs, i=3)
@@ -879,7 +890,6 @@ plot=list(ggplot(data=df, aes(x=x, y=y, colour=z))+
               theme(text = element_text(size = 12),
                     panel.grid.minor = element_blank()))
 }
-
 
 laby <- list('Mean weight diameter (mm)', 'Water drop penetration time (sec.)','Inverse Simpson index (ASVs)')
 
