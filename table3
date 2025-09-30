@@ -1,9 +1,0 @@
-mod,term,bet,StdE,tval,pval
-alf.gm,(Intercept),0.058,0.003,20.147,0
-alf.gm,pBasidiomycota,0.091,0.008,11.405,0
-alf.gm,pMortierellomycota,0.253,0.016,15.95,0
-alf.gm,pMucoromycota,0.404,0.023,17.472,0
-bet.gm,(Intercept),-0.859,0.052,-16.53,0
-bet.gm,pBasidiomycota,1.068,0.071,15.099,0
-bet.gm,pMortierellomycota,-1.439,0.103,-13.936,0
-bet.gm,pMucoromycota,-1.185,0.112,-10.554,0

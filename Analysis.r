@@ -115,7 +115,7 @@ sm <- lapply(mds, summary)%>% # get each model summary
 
 #tables
 kable(sm, format = "simple", caption = "Table 1", digits = 3) # pretty simple table
-write_csv(sm, "table1") # good old way to save results
+write_csv(sm, "table1.csv") # good old way to save results
 # check model fit with diagnostics 
 #overview(mds$alf.mod)
 check <- function(b, k.sample = 5000, k.rep = 200) {
@@ -456,8 +456,8 @@ pm <- lapply(gmsp, summary)%>% # get each model summary
 # Tables
 kable(sm, format = "simple", caption = "Table 2", digits = 3) # pretty simple table
 kable(pm, format = "simple", caption = "Table 3", digits = 3) # pretty simple table
-write_csv(sm, "table2") # good old way to save results
-write_csv(pm, "table3") # good old way to save results
+write_csv(sm, "table2.csv") # good old way to save results
+write_csv(pm, "table3.csv") # good old way to save results
 
 # check model fit with diagnostics 
 appraise(gmsp$alf.gm, method = "simulate", n_simulate = 1000)
@@ -641,8 +641,8 @@ pm <- lapply(gms, summary)%>% # get each model summary parametric part
 # Tables
 kable(sm, format = "simple", caption = "Table 4", digits = 3) # pretty simple table
 kable(pm, format = "simple", caption = "Table 5", digits = 3) # pretty simple table
-write_csv(sm, "table4") # good old way to save results
-write_csv(pm, "table5") # good old way to save results
+write_csv(sm, "table4.csv") # good old way to save results
+write_csv(pm, "table5.csv") # good old way to save results
 # check model fit with diagnostics 
 #overview(mds$alf.mod)
 check <- function(b, k.sample = 5000, k.rep = 200) {
@@ -838,8 +838,8 @@ pm <- lapply(gms, summary)%>% # get each model summary
 # Tables
 kable(sm, format = "simple", caption = "Table 6", digits = 3) # pretty simple table
 kable(pm, format = "simple", caption = "Table 7", digits = 3) # pretty simple table
-write_csv(sm, "table6") # good old way to save results
-write_csv(pm, "table7") # good old way to save results
+write_csv(sm, "table6.csv") # good old way to save results
+write_csv(pm, "table7.csv") # good old way to save results
 # check model fit with diagnostics 
 #overview(mds$alf.mod)
 check <- function(b, k.sample = 5000, k.rep = 200) {
