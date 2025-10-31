@@ -36,5 +36,4 @@ vignettes/*.pdf
 *.knit.md
 
 # Data files that are embargoed
-*.csv
-*.rds
+/data/
